@@ -4,17 +4,68 @@ import streamlit as st
 import pandas as pd
 from ai_portfolio_builder_v2 import AIPortfolioBuilderV2
 
+# ---------------------------------------------------------
+# إعداد صفحة التطبيق
+# ---------------------------------------------------------
 st.set_page_config(page_title="EGX AI Portfolio V2", layout="wide")
 
-st.title("🤖📊 EGX AI Portfolio Builder V2")
+# ---------------------------------------------------------
+# صفحة الدخول (Login)
+# ---------------------------------------------------------
+def check_login():
+    USERNAME = "dr_ahmed"
+    PASSWORD = "EGX2025"
+
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+
+    if st.session_state.logged_in:
+        # لو بالفعل مسجل دخول، نكمل عادي
+        return True
+
+    st.markdown(
+        """
+        <div style="text-align:center; margin-top:30px;">
+            <h1 style="color:#0F766E; margin-bottom:5px;">Secure Access – Dr. Ahmed Salama</h1>
+            <p style="color:#555;">
+                يرجى إدخال بيانات الدخول للوصول إلى منصة الذكاء الاصطناعي لمحافظ البورصة المصرية.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("login_form", clear_on_submit=False):
+        username = st.text_input("اسم المستخدم", value="", placeholder="مثال: dr_ahmed")
+        password = st.text_input("كلمة المرور", type="password", placeholder="••••••••")
+        submitted = st.form_submit_button("تسجيل الدخول ✅")
+
+        if submitted:
+            if username == USERNAME and password == PASSWORD:
+                st.session_state.logged_in = True
+                st.success("تم تسجيل الدخول بنجاح ✅")
+                st.rerun()
+            else:
+                st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة.")
+                st.stop()
+
+    st.stop()
+
+
+# أول حاجة نتحقق من اللوجين
+check_login()
+
+# ---------------------------------------------------------
+# لو وصلنا هنا يبقى الدخول صحيح – نعرض المنصة V2
+# ---------------------------------------------------------
+
+st.title("📊 EGX AI Portfolio Builder V2")
 st.markdown(
     "هذه النسخة المتقدمة تستخدم نموذج **متعدد العوامل**: "
     "عائد/مخاطرة + أساسيات (Fundamentals) + زخم (Momentum)"
 )
 
-# ---------------------------------------------------------
 # الكون الافتراضي لأسهم البورصة المصرية
-# ---------------------------------------------------------
 DEFAULT_UNIVERSE = [
     "COMI", "ETEL", "EKHO", "AMOC", "CIEB", "SWDY",
     "ORHD", "ESRS", "FWRY", "HRHO", "EFIH", "ADIB",
@@ -64,7 +115,7 @@ max_weight_per_stock = st.sidebar.slider(
 build_button = st.sidebar.button("🚀 كوّن محفظة V2 متعددة العوامل")
 
 # ---------------------------------------------------------
-# MAIN
+# MAIN LOGIC
 # ---------------------------------------------------------
 if build_button:
     if not selected_universe:
@@ -120,39 +171,54 @@ if build_button:
                     st.metric("إجمالي (أسهم + كاش)", f"{(total_mv + cash_left):,.2f} EGP")
 
                 # -------- جدول العوامل (Factors) --------
-                if builder.last_factor_df is not None:
+                if hasattr(builder, "last_factor_df") and builder.last_factor_df is not None:
                     st.markdown("---")
                     st.subheader("🧠 تحليل العوامل لكل سهم (Risk / Fundamentals / Momentum)")
 
                     fact = builder.last_factor_df.copy()
 
                     # تحويل العائد والتذبذب إلى نسب مئوية
-                    fact["annual_return_pct"] = (fact["annual_return"] * 100).round(2)
-                    fact["annual_vol_pct"] = (fact["annual_vol"] * 100).round(2)
+                    if "annual_return" in fact.columns:
+                        fact["annual_return_pct"] = (fact["annual_return"] * 100).round(2)
+                    if "annual_vol" in fact.columns:
+                        fact["annual_vol_pct"] = (fact["annual_vol"] * 100).round(2)
 
-                    show_cols = [
-                        "symbol",
-                        "annual_return_pct",
-                        "annual_vol_pct",
-                        "risk_score",
-                        "fund_score",
-                        "mom_score",
-                        "total_score"
-                    ]
+                    show_cols = []
+                    col_map = {}
 
-                    fact = fact[show_cols].copy()
+                    if "symbol" in fact.columns:
+                        show_cols.append("symbol")
+                        col_map["symbol"] = "السهم"
 
-                    fact = fact.rename(columns={
-                        "symbol": "السهم",
-                        "annual_return_pct": "العائد السنوي (%)",
-                        "annual_vol_pct": "التذبذب السنوي (%)",
-                        "risk_score": "Risk Score",
-                        "fund_score": "Fundamentals Score",
-                        "mom_score": "Momentum Score",
-                        "total_score": "الدرجة النهائية (Total Score)"
-                    })
+                    if "annual_return_pct" in fact.columns:
+                        show_cols.append("annual_return_pct")
+                        col_map["annual_return_pct"] = "العائد السنوي (%)"
 
-                    st.dataframe(fact, use_container_width=True)
+                    if "annual_vol_pct" in fact.columns:
+                        show_cols.append("annual_vol_pct")
+                        col_map["annual_vol_pct"] = "التذبذب السنوي (%)"
+
+                    if "risk_score" in fact.columns:
+                        show_cols.append("risk_score")
+                        col_map["risk_score"] = "Risk Score"
+
+                    if "fund_score" in fact.columns:
+                        show_cols.append("fund_score")
+                        col_map["fund_score"] = "Fundamentals Score"
+
+                    if "mom_score" in fact.columns:
+                        show_cols.append("mom_score")
+                        col_map["mom_score"] = "Momentum Score"
+
+                    if "total_score" in fact.columns:
+                        show_cols.append("total_score")
+                        col_map["total_score"] = "الدرجة النهائية (Total Score)"
+
+                    if show_cols:
+                        fact = fact[show_cols].rename(columns=col_map)
+                        st.dataframe(fact, use_container_width=True)
+                    else:
+                        st.info("لا توجد بيانات تفصيلية للعوامل.")
 
             except Exception as e:
                 st.error(f"حدث خطأ أثناء بناء المحفظة المتقدمة: {e}")
