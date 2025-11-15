@@ -1,0 +1,160 @@
+# egx_ai_portfolio_app_v2.py
+
+import streamlit as st
+import pandas as pd
+from ai_portfolio_builder_v2 import AIPortfolioBuilderV2
+
+st.set_page_config(page_title="EGX AI Portfolio V2", layout="wide")
+
+st.title("🤖📊 EGX AI Portfolio Builder V2")
+st.markdown(
+    "هذه النسخة المتقدمة تستخدم نموذج **متعدد العوامل**: "
+    "عائد/مخاطرة + أساسيات (Fundamentals) + زخم (Momentum)"
+)
+
+# ---------------------------------------------------------
+# الكون الافتراضي لأسهم البورصة المصرية
+# ---------------------------------------------------------
+DEFAULT_UNIVERSE = [
+    "COMI", "ETEL", "EKHO", "AMOC", "CIEB", "SWDY",
+    "ORHD", "ESRS", "FWRY", "HRHO", "EFIH", "ADIB",
+    "DICE", "CCAP", "ABUK"
+]
+
+# ---------------------------------------------------------
+# SIDEBAR
+# ---------------------------------------------------------
+st.sidebar.header("إعدادات المحفظة (V2)")
+
+capital = st.sidebar.number_input(
+    "المبلغ المستثمر (EGP)",
+    min_value=1000.0,
+    value=100000.0,
+    step=5000.0
+)
+
+selected_universe = st.sidebar.multiselect(
+    "اختر أسهم من البورصة المصرية:",
+    options=DEFAULT_UNIVERSE,
+    default=DEFAULT_UNIVERSE[:10]
+)
+
+lookback_days = st.sidebar.number_input(
+    "عدد الأيام التاريخية (Lookback Days)",
+    min_value=60,
+    max_value=365,
+    value=180,
+    step=30
+)
+
+max_stocks = st.sidebar.number_input(
+    "أقصى عدد أسهم في المحفظة",
+    min_value=3,
+    max_value=20,
+    value=8
+)
+
+max_weight_per_stock = st.sidebar.slider(
+    "أقصى وزن لسهم واحد (%)",
+    min_value=5,
+    max_value=50,
+    value=20
+) / 100.0
+
+build_button = st.sidebar.button("🚀 كوّن محفظة V2 متعددة العوامل")
+
+# ---------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------
+if build_button:
+    if not selected_universe:
+        st.error("من فضلك اختر أسهماً أولاً.")
+    else:
+        with st.spinner("جاري تحميل البيانات وبناء المحفظة المتقدمة..."):
+            try:
+                builder = AIPortfolioBuilderV2(
+                    universe=selected_universe,
+                    lookback_days=lookback_days,
+                    auto_suffix=True,
+                    verbose=False
+                )
+
+                df, cash_left = builder.build_portfolio(
+                    capital=capital,
+                    max_stocks=max_stocks,
+                    max_weight_per_stock=max_weight_per_stock
+                )
+
+                st.success("✅ تم تكوين المحفظة المتقدمة V2 بنجاح")
+
+                col1, col2 = st.columns(2)
+
+                # -------- جدول المحفظة --------
+                with col1:
+                    st.subheader("📊 تفاصيل المحفظة (V2)")
+                    st.dataframe(df, use_container_width=True)
+
+                # -------- رسم الأوزان --------
+                with col2:
+                    st.subheader("🎯 أوزان المحفظة (بعد التقريب)")
+                    if "weight_real" in df.columns:
+                        weights_series = pd.Series(
+                            df["weight_real"].values,
+                            index=df["symbol"]
+                        )
+                        st.bar_chart(weights_series)
+                    else:
+                        st.info("لا توجد أوزان محسوبة.")
+
+                # -------- ملخص المحفظة --------
+                st.markdown("---")
+                total_mv = df["market_value"].sum()
+
+                st.subheader("📘 ملخص المحفظة المتقدمة")
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    st.metric("قيمة الأسهم", f"{total_mv:,.2f} EGP")
+                with col_b:
+                    st.metric("الكاش المتبقي", f"{cash_left:,.2f} EGP")
+                with col_c:
+                    st.metric("إجمالي (أسهم + كاش)", f"{(total_mv + cash_left):,.2f} EGP")
+
+                # -------- جدول العوامل (Factors) --------
+                if builder.last_factor_df is not None:
+                    st.markdown("---")
+                    st.subheader("🧠 تحليل العوامل لكل سهم (Risk / Fundamentals / Momentum)")
+
+                    fact = builder.last_factor_df.copy()
+
+                    # تحويل العائد والتذبذب إلى نسب مئوية
+                    fact["annual_return_pct"] = (fact["annual_return"] * 100).round(2)
+                    fact["annual_vol_pct"] = (fact["annual_vol"] * 100).round(2)
+
+                    show_cols = [
+                        "symbol",
+                        "annual_return_pct",
+                        "annual_vol_pct",
+                        "risk_score",
+                        "fund_score",
+                        "mom_score",
+                        "total_score"
+                    ]
+
+                    fact = fact[show_cols].copy()
+
+                    fact = fact.rename(columns={
+                        "symbol": "السهم",
+                        "annual_return_pct": "العائد السنوي (%)",
+                        "annual_vol_pct": "التذبذب السنوي (%)",
+                        "risk_score": "Risk Score",
+                        "fund_score": "Fundamentals Score",
+                        "mom_score": "Momentum Score",
+                        "total_score": "الدرجة النهائية (Total Score)"
+                    })
+
+                    st.dataframe(fact, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء بناء المحفظة المتقدمة: {e}")
+else:
+    st.info("اضبط الإعدادات من اليسار ثم اضغط على زر (🚀 كوّن محفظة V2 متعددة العوامل).")
