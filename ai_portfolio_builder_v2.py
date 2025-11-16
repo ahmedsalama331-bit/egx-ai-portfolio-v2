@@ -1,5 +1,3 @@
-# ai_portfolio_builder_v2.py
-
 import numpy as np
 import pandas as pd
 from egx_yahoo import EGXYahoo
@@ -44,10 +42,12 @@ class AIPortfolioBuilderV2:
         الحصول على تاريخ الأسعار لكل سهم في الكون باستخدام egx.get_price(symbol).
         نرجع dict: {symbol: Series}
         """
+        print("بدء تحميل البيانات...")
         history = {}
 
         for sym in self.universe:
             try:
+                print(f"جلب البيانات للسهم: {sym}")
                 s = self.egx.get_price(sym)
             except Exception as e:
                 self._log(f"⚠️ خطأ أثناء جلب الأسعار للسهم {sym}: {e}")
@@ -68,16 +68,14 @@ class AIPortfolioBuilderV2:
 
             history[sym] = s
 
+        print("تم تحميل البيانات بنجاح!")
         return history
 
     # ------------------------------------------------------------------
     # 2) حساب العائد السنوي والتذبذب السنوي لكل سهم
     # ------------------------------------------------------------------
     def _compute_return_risk(self, history_dict):
-        """
-        نرجع DataFrame فيه:
-        symbol, annual_return, annual_vol, risk_score_raw
-        """
+        print("حساب العائد والمخاطرة...")
         rows = []
 
         for sym, s in history_dict.items():
@@ -103,6 +101,7 @@ class AIPortfolioBuilderV2:
                 "risk_score_raw": risk_score_raw
             })
 
+        print("تم حساب العائد والمخاطرة!")
         if not rows:
             return pd.DataFrame()
 
@@ -113,15 +112,13 @@ class AIPortfolioBuilderV2:
     # 3) حساب زخم السعر Momentum لكل سهم (1M, 3M, 6M)
     # ------------------------------------------------------------------
     def _compute_momentum(self, history_dict):
-        """
-        نرجع DataFrame فيه:
-        symbol, mom_1m, mom_3m, mom_6m, mom_score_raw
-        """
+        print("حساب الزخم السعري...")
         rows = []
 
         for sym, s in history_dict.items():
             s = s.dropna()
             if len(s) < 22:
+                self._log(f"⚠️ البيانات غير كافية للسهم {sym} لحساب الزخم.")
                 continue
 
             last = float(s.iloc[-1])
@@ -138,13 +135,13 @@ class AIPortfolioBuilderV2:
             mom_3m = safe_mom(63)   # تقريباً 3 شهور
             mom_6m = safe_mom(126)  # تقريباً 6 شهور
 
-            # ندمجهم في Score واحد
             vals = [mom_1m, mom_3m, mom_6m]
             vals_clean = [v for v in vals if not np.isnan(v)]
             if not vals_clean:
+                self._log(f"⚠️ البيانات غير كافية لحساب الزخم للسهم {sym}.")
                 continue
 
-            # متوسط بسيط أو weighted
+            # استخدام قيمة بديلة إذا كانت القيم غير موجودة
             mom_score_raw = 0.5 * (mom_1m if not np.isnan(mom_1m) else 0) + \
                             0.3 * (mom_3m if not np.isnan(mom_3m) else 0) + \
                             0.2 * (mom_6m if not np.isnan(mom_6m) else 0)
@@ -157,6 +154,7 @@ class AIPortfolioBuilderV2:
                 "mom_score_raw": mom_score_raw
             })
 
+        print("تم حساب الزخم السعري!")
         if not rows:
             return pd.DataFrame()
 
@@ -167,12 +165,7 @@ class AIPortfolioBuilderV2:
     # 4) حساب Score للأساسيات Fundamentals
     # ------------------------------------------------------------------
     def _compute_fundamental_scores(self):
-        """
-        نحاول استخدام egx.get_fundamentals(symbol) لو موجودة.
-        لو غير متوفرة → نرجّع Score ثابت = 0.5 لكل الأسهم (محايد).
-        نتوقّع أن get_fundamentals يرجع dict يحتوي مثلاً: pe, pb, roe, de, eps_growth
-        """
-        # لو مفيش فانكشن للأساسيات → Score محايد
+        print("حساب الأساسيات...")
         if not hasattr(self.egx, "get_fundamentals"):
             return {sym: 0.5 for sym in self.universe}
 
@@ -185,21 +178,15 @@ class AIPortfolioBuilderV2:
                 continue
 
             if not fd or not isinstance(fd, dict):
+                raw_scores[sym] = 0.5  # قيمة بديلة للأساسيات
                 continue
 
-            # هنستخدم قواعد بسيطة:
-            # - P/E بين 5 و 20 أفضل
-            # - P/B بين 0.5 و 3
-            # - ROE أعلى من 10% ممتاز
-            # - Debt/Equity أقل من 1 أفضل
-            # - EPS Growth موجب أفضل
-
+            # الحسابات الأخرى للأساسيات هنا
             score = 0.0
             weight_sum = 0.0
 
             pe = fd.get("pe") or fd.get("PE")
             if pe is not None and pe > 0:
-                # كلما اقترب من 10-15 يكون أفضل، بس نتعامل تقريبياً
                 if 5 <= pe <= 20:
                     score += 1.0
                 elif 0 < pe < 5 or 20 < pe <= 30:
@@ -241,12 +228,7 @@ class AIPortfolioBuilderV2:
 
             raw_scores[sym] = score / weight_sum  # بين 0 و 1 تقريباً
 
-        # لو مفيش ولا سهم له بيانات أساسيات → نخلي كلهم 0.5
-        if not raw_scores:
-            return {sym: 0.5 for sym in self.universe}
-
-        # نرجع dict normalized لو حابب نعمل min-max داخل الكون
-        # لكن بما إنه أصلاً بين 0 و 1، نرجعه كما هو
+        print("تم حساب الأساسيات!")
         return raw_scores
 
     # ------------------------------------------------------------------
@@ -262,7 +244,6 @@ class AIPortfolioBuilderV2:
         max_v = np.nanmax(arr)
 
         if np.isnan(min_v) or np.isnan(max_v) or max_v == min_v:
-            # كل القيم متساوية → نخليها 0.5
             return np.array([0.5] * len(arr))
 
         return (arr - min_v) / (max_v - min_v)
@@ -271,6 +252,7 @@ class AIPortfolioBuilderV2:
     # 6) بناء المحفظة
     # ------------------------------------------------------------------
     def build_portfolio(self, capital, max_stocks=12, max_weight_per_stock=0.2):
+        print("بدء بناء المحفظة...")
         capital = float(capital)
 
         # 1) التاريخ السعري
@@ -292,13 +274,11 @@ class AIPortfolioBuilderV2:
         fund_scores_dict = self._compute_fundamental_scores()
 
         # 5) دمج العوامل في جدول واحد
-        # ندمج return/risk + momentum على symbol
         factor_df = pd.merge(rr_df, mom_df, on="symbol", how="inner")
 
         if factor_df.empty:
             raise ValueError("لم يتبق أسهم مشتركة بين عوامل العائد/المخاطرة والزخم.")
 
-        # نضيف fundamental_score_raw من dict
         factor_df["fund_score_raw"] = factor_df["symbol"].map(
             lambda s: fund_scores_dict.get(s, 0.5)
         )
@@ -397,4 +377,5 @@ class AIPortfolioBuilderV2:
         pf_df = pf_df.sort_values("weight_real", ascending=False).reset_index(drop=True)
 
         cash_left = capital - total_mv
+        print("تم بناء المحفظة بنجاح!")
         return pf_df, cash_left

@@ -1,9 +1,6 @@
-# smart_ai_portfolio_builder.py
-
 import numpy as np
 import pandas as pd
 from egx_yahoo import EGXYahoo
-
 
 class SmartAIPortfolioBuilder:
     """
@@ -81,7 +78,7 @@ class SmartAIPortfolioBuilder:
             annual_return = (1 + mean_daily) ** 250 - 1
             annual_vol = daily_vol * np.sqrt(250)
 
-            if np.isnan(annual_return) or np.isnan(annual_vol):
+            if np.isnan(annual_return) or np.isnan(annual_vol) or annual_vol == 0:
                 continue
 
             features[sym] = {
@@ -91,7 +88,7 @@ class SmartAIPortfolioBuilder:
 
         return features
 
-       def build_portfolio(self, capital, max_stocks=12, max_weight_per_stock=0.2):
+    def build_portfolio(self, capital, max_stocks=12, max_weight_per_stock=0.2):
         """
         يبني المحفظة بناءً على:
         - أعلى Score (return / volatility)

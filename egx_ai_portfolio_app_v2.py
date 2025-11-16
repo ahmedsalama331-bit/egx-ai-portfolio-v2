@@ -1,5 +1,3 @@
-# egx_ai_portfolio_app_v2.py
-
 import streamlit as st
 import pandas as pd
 from ai_portfolio_builder_v2 import AIPortfolioBuilderV2
@@ -50,7 +48,6 @@ def check_login():
                 st.stop()
 
     st.stop()
-
 
 # أول حاجة نتحقق من اللوجين
 check_login()
@@ -130,6 +127,7 @@ if build_button:
                     verbose=False
                 )
 
+                # بناء المحفظة
                 df, cash_left = builder.build_portfolio(
                     capital=capital,
                     max_stocks=max_stocks,

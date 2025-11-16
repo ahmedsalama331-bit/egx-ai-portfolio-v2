@@ -1,4 +1,3 @@
-# egx_yahoo.py
 import yfinance as yf
 import pandas as pd
 
@@ -28,23 +27,27 @@ class EGXYahoo:
         """
         sym = self._format_symbol(symbol)
 
-        data = yf.download(
-            sym,
-            start=start,
-            end=end,
-            interval="1d",
-            auto_adjust=adjusted,
-            progress=False,
-        )
+        try:
+            data = yf.download(
+                sym,
+                start=start,
+                end=end,
+                interval="1d",
+                auto_adjust=adjusted,
+                progress=False,
+            )
 
-        if data is None or data.empty:
-            self._log(f"⚠️ لا توجد بيانات للسهم: {sym}")
+            if data.empty:
+                self._log(f"⚠️ لا توجد بيانات للسهم: {sym}")
+                return None
+
+            data = data.sort_index()
+            close_series = data["Close"].copy()
+            close_series.name = sym
+            return close_series
+        except Exception as e:
+            self._log(f"❌ حدث خطأ أثناء تحميل البيانات للسهم {sym}: {e}")
             return None
-
-        data = data.sort_index()
-        close_series = data["Close"].copy()
-        close_series.name = sym
-        return close_series
 
     def get_all(self, start=None, end=None, adjusted=False):
         """
