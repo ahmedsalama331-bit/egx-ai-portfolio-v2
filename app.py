@@ -43,3 +43,4 @@ def run_portfolio_app():
 if not st.session_state.authenticated:
     login_screen()
 else:
+    run_portfolio_app()
