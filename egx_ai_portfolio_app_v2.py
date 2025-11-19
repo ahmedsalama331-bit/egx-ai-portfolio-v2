@@ -11,16 +11,27 @@ st.set_page_config(page_title="EGX AI Portfolio V2", layout="wide")
 # صفحة الدخول (Login)
 # ---------------------------------------------------------
 def check_login():
-    USERNAME = "dr_ahmed"
-    PASSWORD = "EGX2025"
+    # ✅ قراءة بيانات الدخول من Streamlit Secrets
+    try:
+        USERNAME = st.secrets["EGX_USERNAME"]
+        PASSWORD = st.secrets["EGX_PASSWORD"]
+    except Exception as e:
+        st.error(
+            "⚠️ إعدادات الدخول غير مضبوطة.\n\n"
+            "من فضلك أضف EGX_USERNAME و EGX_PASSWORD في ملف secrets.toml محليًا "
+            "وفي قسم Secrets في Streamlit Cloud."
+        )
+        st.stop()
 
+    # تهيئة حالة السيشن لو مش موجودة
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
+    # لو بالفعل مسجل دخول، نكمل عادي
     if st.session_state.logged_in:
-        # لو بالفعل مسجل دخول، نكمل عادي
         return True
 
+    # واجهة تسجيل الدخول
     st.markdown(
         """
         <div style="text-align:center; margin-top:30px;">
